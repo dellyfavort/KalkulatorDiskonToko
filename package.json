@@ -1,0 +1,22 @@
+{
+  "name": "kalkulator-diskon-toko",
+  "displayName": "Kalkulator Diskon Toko",
+  "version": "1.0.0",
+  "description": "Aplikasi kalkulator diskon bertingkat berbasis HTML, CSS, JavaScript, dan Cordova.",
+  "main": "index.js",
+  "scripts": {},
+  "author": "Mahasiswa",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "cordova": "^13.0.0",
+    "cordova-browser": "^7.0.0"
+  },
+  "cordova": {
+    "plugins": {
+      "cordova-plugin-device": {}
+    },
+    "platforms": [
+      "browser"
+    ]
+  }
+}

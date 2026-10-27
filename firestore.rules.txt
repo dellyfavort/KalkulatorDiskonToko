@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/history/{historyId} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == userId;
+      }
+
+      function validCalculation() {
+        return request.resource.data.keys().hasAll([
+                 'hargaAwal', 'diskon1', 'diskon2', 'hargaSetelahDiskon1',
+                 'hargaAkhir', 'totalHemat', 'persenHemat', 'createdAt'
+               ])
+          && request.resource.data.keys().hasOnly([
+                 'hargaAwal', 'diskon1', 'diskon2', 'hargaSetelahDiskon1',
+                 'hargaAkhir', 'totalHemat', 'persenHemat', 'createdAt'
+               ])
+          && request.resource.data.hargaAwal is number
+          && request.resource.data.hargaAwal > 0
+          && request.resource.data.diskon1 is number
+          && request.resource.data.diskon1 >= 0
+          && request.resource.data.diskon1 <= 100
+          && request.resource.data.diskon2 is number
+          && request.resource.data.diskon2 >= 0
+          && request.resource.data.diskon2 <= 100
+          && request.resource.data.hargaSetelahDiskon1 is number
+          && request.resource.data.hargaSetelahDiskon1 >= 0
+          && request.resource.data.hargaAkhir is number
+          && request.resource.data.hargaAkhir >= 0
+          && request.resource.data.totalHemat is number
+          && request.resource.data.totalHemat >= 0
+          && request.resource.data.persenHemat is number
+          && request.resource.data.persenHemat >= 0
+          && request.resource.data.persenHemat <= 100
+          && request.resource.data.createdAt is timestamp;
+      }
+
+      allow read, delete: if isOwner();
+      allow create: if isOwner() && validCalculation();
+      allow update: if false;
+    }
+  }
+}

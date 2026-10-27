@@ -1,0 +1,9 @@
+# Dependensi Node.js
+node_modules/
+
+# Platform dan Plugins Cordova/Ionic (bisa di-generate ulang dengan npm install / cordova build)
+platforms/
+plugins/
+
+# File konfigurasi lokal atau build
+.DS_Store

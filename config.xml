@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.example.kalkulatordiskontoko" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+  <name>Kalkulator Diskon Toko</name>
+  <description>Kalkulator harga akhir untuk diskon bertingkat.</description>
+  <author email="student@example.com" href="https://cordova.apache.org">Mahasiswa</author>
+  <content src="index.html" />
+  <access origin="*" />
+  <preference name="DisallowOverscroll" value="true" />
+  <preference name="Orientation" value="portrait" />
+  <preference name="AndroidWindowSplashScreenBackground" value="#f4f8f6" />
+  <plugin name="cordova-plugin-device" spec="^3.0.0" />
+</widget>
