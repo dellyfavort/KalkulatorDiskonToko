@@ -11,11 +11,13 @@
 }
 
 * { box-sizing: border-box; }
-html { min-height: 100%; background: var(--page); }
+html { min-height: 100%; height: 100%; background: var(--page); }
 body {
   margin: 0;
   min-height: 100vh;
   min-height: 100dvh;
+  height: 100%;
+  overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: stretch;
@@ -32,13 +34,19 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(38, 95, 63, 
   display: flex;
   flex-direction: column;
   width: min(100%, 420px);
-  height: 100vh;
-  height: 100dvh;
+  height: var(--app-visible-height, 100dvh);
   min-height: 0;
+  max-height: var(--app-visible-height, 100dvh);
   background: var(--white);
-  overflow: hidden;
-  position: relative; /* DITAMBAHKAN AGAR MODAL TIDAK MELEBAR KELUAR HP */
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+  position: relative;
 }
+.app-shell::-webkit-scrollbar { display: none; }
+.app-header, .result-card, .numpad, .app-footer { flex-shrink: 0; }
 .app-header {
   display: flex;
   align-items: center;
@@ -106,7 +114,7 @@ h1 { margin: 0; font-size: 1.2rem; line-height: 1.2; font-weight: 800; letter-sp
 .saving-pill.is-empty { color: #557467; background: rgba(255,255,255,.65); }
 .discount-summary { position: relative; z-index: 1; margin: 10px 0 0; color: #557467; font-size: .75rem; font-weight: 600; }
 
-.input-section { flex: 1 1 auto; min-height: 0; padding: 0 21px 12px; overflow-y: auto; overscroll-behavior: contain; }
+.input-section { flex: 1 0 auto; min-height: auto; padding: 0 21px 16px; overflow: visible; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 17px; }
 .section-heading .eyebrow { margin-bottom: 4px; }
 .section-heading h2 { margin: 0; font-size: 1rem; letter-spacing: -.025em; }
@@ -144,7 +152,7 @@ input::placeholder { color: #bcc6c0; }
 
 @media (min-width: 600px) {
   body { align-items: center; padding: 22px; }
-  .app-shell { width: min(100%, 420px); height: min(850px, calc(100dvh - 44px)); min-height: 560px; border: 5px solid #182232; border-radius: 35px; box-shadow: 0 25px 75px rgba(21, 38, 32, .18); }
+  .app-shell { width: min(100%, 420px); height: min(850px, calc(100dvh - 44px)); max-height: min(850px, calc(100dvh - 44px)); min-height: 420px; border: 5px solid #182232; border-radius: 35px; box-shadow: 0 25px 75px rgba(21, 38, 32, .18); }
   .app-header { padding-top: 18px; }
   .result-card { margin-top: 4px; }
 }
@@ -171,6 +179,65 @@ input::placeholder { color: #bcc6c0; }
   .numpad { padding-left: 12px; padding-right: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+
+/* =========================================
+   RESPONSIVE SAAT KEYBOARD SISTEM TERBUKA
+   Seluruh .app-shell menjadi area scroll; numpad disembunyikan agar
+   kolom aktif dan konten tidak tertutup keyboard Android/iOS.
+   ========================================= */
+.app-shell.keyboard-open {
+  height: var(--app-visible-height, 55dvh);
+  max-height: var(--app-visible-height, 55dvh);
+  min-height: 0;
+  scroll-padding-block: 16px 24px;
+}
+.app-shell.keyboard-open .app-header {
+  padding-top: max(7px, env(safe-area-inset-top));
+  padding-bottom: 7px;
+}
+.app-shell.keyboard-open .header-symbol {
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+  border-radius: 10px;
+}
+.app-shell.keyboard-open .header-symbol svg { width: 19px; }
+.app-shell.keyboard-open h1 { font-size: 1rem; }
+.app-shell.keyboard-open .result-card {
+  margin: 2px 12px 9px;
+  padding: 9px 14px 10px;
+  border-radius: 17px;
+}
+.app-shell.keyboard-open .result-topline,
+.app-shell.keyboard-open .old-price,
+.app-shell.keyboard-open .saving-pill,
+.app-shell.keyboard-open .discount-summary,
+.app-shell.keyboard-open .effective-discount-text,
+.app-shell.keyboard-open .save-history-button,
+.app-shell.keyboard-open .save-history-status,
+.app-shell.keyboard-open .numpad,
+.app-shell.keyboard-open .app-footer {
+  display: none !important;
+}
+.app-shell.keyboard-open .final-price {
+  font-size: clamp(1.55rem, 7vw, 2rem);
+  line-height: 1.12;
+}
+.app-shell.keyboard-open .input-section {
+  flex: 0 0 auto;
+  padding: 0 16px calc(22px + env(safe-area-inset-bottom));
+}
+.app-shell.keyboard-open .section-heading { margin: 2px 0 11px; }
+.app-shell.keyboard-open .section-heading .eyebrow,
+.app-shell.keyboard-open .live-indicator { display: none; }
+.app-shell.keyboard-open .discount-grid { margin-top: 11px; }
+#container-harga, #container-diskon1, #container-diskon2 { scroll-margin-block: 18px; }
+
+@media (max-width: 380px) {
+  .app-header { padding-left: 15px; padding-right: 15px; }
+  .section-heading h2 { font-size: .94rem; }
+  .result-card { margin-left: 12px; margin-right: 12px; }
+}
 
 /* =========================================
    DESAIN MODAL RIWAYAT (NATIVE BOTTOM SHEET)
@@ -274,5 +341,74 @@ input::placeholder { color: #bcc6c0; }
 .history-item p:last-child {
   font-size: 0.8rem;
   color: #9ca3af;
+  margin-top: 4px;
+}
+
+/* Tombol simpan riwayat dan penjelasan diskon efektif */
+.effective-discount-text {
+  position: relative;
+  z-index: 1;
+  margin: 7px 0 0;
+  color: #496b5a;
+  font-size: .69rem;
+  line-height: 1.4;
+  font-weight: 650;
+}
+.save-history-button {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: var(--green);
+  font-size: .8rem;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.save-history-button:active { transform: scale(.99); }
+.save-history-button:disabled { opacity: .6; cursor: wait; }
+.save-history-status {
+  position: relative;
+  z-index: 1;
+  min-height: 1em;
+  margin: 6px 0 0;
+  color: #668071;
+  font-size: .65rem;
+  line-height: 1.35;
+}
+.save-history-status[data-state="success"],
+#historyStatus[data-state="success"] { color: #247044; }
+.save-history-status[data-state="error"],
+#historyStatus[data-state="error"] { color: #b42318; }
+.save-history-status[data-state="loading"],
+#historyStatus[data-state="loading"] { color: #526b84; }
+.history-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.history-item-top strong { min-width: 0; overflow-wrap: anywhere; }
+.history-delete-button {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border: 1px solid #f0caca;
+  border-radius: 9px;
+  color: #b42318;
+  background: #fff7f7;
+  font-size: .72rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.history-delete-button:disabled { opacity: .55; cursor: wait; }
+.history-item .history-date {
+  font-size: .78rem;
+  color: #8b978f;
   margin-top: 4px;
 }

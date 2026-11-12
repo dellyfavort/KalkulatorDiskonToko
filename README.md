@@ -1,101 +1,91 @@
-# Kalkulator Diskon Toko — UI Keyboard + Firebase Cloud Firestore
+# Kalkulator Diskon Toko
 
-Patch ini mempertahankan UI/UX terbaru yang bisa diketik melalui keyboard komputer atau tombol numpad layar, lalu menambahkan fitur riwayat perhitungan ke Firebase.
+Aplikasi kalkulator diskon bertingkat berbasis Apache Cordova, JavaScript, dan Firebase Authentication (Anonymous) + Cloud Firestore.
 
-## Yang ditambahkan
-- Firebase JavaScript SDK melalui CDN (Compat SDK 12.17.0).
-- Anonymous Authentication sehingga demo UTS tidak memerlukan layar daftar/login.
-- Tombol **Simpan Perhitungan** dan daftar 10 riwayat terbaru.
-- Cloud Firestore dengan Security Rules untuk memisahkan data per UID.
-- Status koneksi Firebase di bagian Riwayat Perhitungan.
+### Keyboard dan tata letak mobile
 
-## 1. Pasang patch ke project Cordova yang sudah ada
-1. Tutup browser tab kalkulator bila sedang terbuka.
-2. Ekstrak ZIP ke folder utama project, misalnya `C:\Users\LENOVO\KalkulatorDiskonToko`.
-3. Izinkan folder `www` dan file `firestore.rules.txt` digabung/diganti jika diminta.
-4. Jangan hapus `config.xml`, `package.json`, `node_modules`, atau `platforms/android` yang sudah kamu punya.
+Kolom harga dan diskon memakai atribut `readonly` saat aplikasi pertama dibuka agar keyboard sistem tidak langsung tampil. Saat pengguna mengetuk kolom, input diaktifkan dan keyboard sistem muncul. Ketika keyboard terbuka, aplikasi mendeteksi perubahan `VisualViewport`, mengecilkan kartu hasil, menyembunyikan numpad/footer agar tidak bertumpuk dengan keyboard, dan menggulir kolom aktif ke area yang terlihat. Seluruh layar aplikasi menjadi area scroll pada layar pendek.
 
-## 2. Buat dan daftarkan Firebase Web App
-1. Buka https://console.firebase.google.com/ dan buat/pilih project.
-2. Di halaman Project Overview, klik ikon Web `</>` untuk mendaftarkan Web App. Firebase Hosting tidak wajib.
-3. Buka Project settings (roda gigi) > General > Your apps > SDK setup and configuration.
-4. Salin nilai `apiKey`, `authDomain`, `projectId`, dan `appId`.
-5. Buka `www/js/firebase-config.js`, lalu ganti nilai `ISI_...` dengan nilai dari project Firebase milikmu. Jangan letakkan service account/private key di sini.
+Untuk Android, `config.xml` mengatur `windowSoftInputMode="adjustResize"` melalui manifest merge agar area WebView dapat menyesuaikan ruang ketika keyboard tampil. Setelah mengubah `config.xml`, jalankan `cordova prepare android` sebelum build ulang. Perilaku akhir tetap perlu diuji pada beberapa ukuran layar dan versi Android/WebView karena pengelolaan keyboard dapat berbeda antarperangkat.
 
-Contoh format:
 
-```js
-window.KALKULATOR_FIREBASE_CONFIG = {
-  apiKey: "nilai-api-key-dari-firebase",
-  authDomain: "id-project.firebaseapp.com",
-  projectId: "id-project",
-  appId: "nilai-app-id"
-};
-```
+## Fitur
+- Menghitung diskon pertama dan diskon kedua secara bertingkat.
+- Menampilkan harga akhir, nominal hemat, serta persentase diskon efektif.
+- Menyimpan perhitungan ke Cloud Firestore melalui tombol **Simpan Perhitungan**.
+- Membaca maksimal 30 riwayat terakhir.
+- Menghapus riwayat per item setelah konfirmasi.
+- Menampilkan platform perangkat melalui `cordova-plugin-device`.
+- Riwayat bersifat tidak dapat diedit; Rules mengizinkan Create, Read, dan Delete (CRD).
 
-Gunakan konfigurasi aslimu, bukan contoh di atas.
-
-## 3. Aktifkan Anonymous Authentication
-1. Firebase Console > Build > Authentication.
-2. Klik Get started jika muncul.
-3. Buka tab Sign-in method / Providers.
-4. Pilih **Anonymous**, aktifkan, lalu Save.
-
-Aplikasi membuat sesi anonim agar bisa mematuhi Firestore Security Rules tanpa perlu form login.
-
-## 4. Buat Cloud Firestore
-1. Firebase Console > Build > Firestore Database > Create database.
-2. Pilih lokasi database yang sesuai. Lokasi tidak bisa diubah dengan mudah setelah dibuat.
-3. Setelah database dibuat, buka tab **Rules**.
-4. Salin isi file `firestore.rules.txt` ke editor Rules dan klik **Publish**.
-5. Jangan gunakan aturan terbuka `allow read, write: if true`.
-
-Struktur data yang akan muncul:
+## Struktur Firestore
 
 ```text
-users
-  └── <UID pengguna anonim>
-      └── history
-          └── <ID dokumen otomatis>
-              ├── hargaAwal
-              ├── diskon1
-              ├── diskon2
-              ├── hargaSetelahDiskon1
-              ├── hargaAkhir
-              ├── totalHemat
-              ├── persenHemat
-              └── createdAt
+users/{uid}/history/{historyId}
+  hargaAwal
+  diskon1
+  diskon2
+  hargaSetelahDiskon1
+  hargaAkhir
+  totalHemat
+  persenHemat
+  createdAt
 ```
 
-## 5. Jalankan untuk pengujian
-Untuk menguji Firebase di browser, sebaiknya buka folder `www` dengan ekstensi VS Code **Live Server** (misalnya `http://localhost:5500`) daripada membuka file HTML dengan `file://`.
+Nama koleksi dan nama field pada kode JavaScript harus sama dengan `firestore.rules.txt`. Jangan mengubah salah satunya tanpa memperbarui yang lain.
 
-1. Di VS Code, klik kanan `www/index.html` > Open with Live Server.
-2. Pastikan komputer terkoneksi ke internet.
-3. Gulir ke bagian **Riwayat perhitungan**. Status harus berubah menjadi **Terhubung**.
-4. Isi harga dan dua diskon, lalu klik **Simpan Perhitungan**.
-5. Pastikan riwayat muncul dalam aplikasi dan di Firebase Console > Firestore Database > Data.
+## Pengaturan Firebase
+1. Buka Firebase Console dan pilih project `kalkulator-diskon-toko`.
+2. Pastikan Authentication sudah diaktifkan.
+3. Di Authentication > Sign-in method, aktifkan **Anonymous**.
+4. Pastikan Cloud Firestore sudah dibuat.
+5. Buka Firestore Database > Rules. Salin isi `firestore.rules.txt`, lalu klik **Publish**.
+6. Jangan gunakan Rules testing yang mengizinkan semua akses.
 
-Jika menggunakan Live Server pada alamat host lain, periksa Firebase Console > Authentication > Settings > Authorized domains. Tambahkan hostname pengujian jika diminta. Jangan memasukkan `http://` atau port, cukup hostname.
+Konfigurasi web Firebase berada di `www/js/firebase-config.js`. File ini memuat konfigurasi aplikasi klien, bukan service account/private key.
 
-## 6. Jika status belum terhubung
-- `Belum dikonfigurasi`: periksa placeholder di `www/js/firebase-config.js`.
-- `SDK tidak tersedia`: pastikan internet aktif dan akses `www.gstatic.com` tidak diblokir.
-- `Autentikasi gagal`: pastikan Anonymous Authentication aktif; cek pesan Console browser.
-- Gagal memuat/menyimpan riwayat: pastikan Firestore sudah dibuat dan Rules sudah dipublikasikan.
-- Untuk detail, buka Developer Tools browser (F12) > Console.
+## Menjalankan di browser
+1. Buka folder proyek melalui VS Code.
+2. Jalankan `www/index.html` menggunakan Live Server atau server lokal lain, bukan `file://`.
+3. Pastikan perangkat terhubung ke internet untuk memuat Firebase SDK dari CDN serta melakukan autentikasi dan akses Firestore.
+4. Isi harga dan diskon, lalu tekan **Simpan Perhitungan**.
+5. Tekan ikon riwayat untuk membaca data.
+6. Tekan **Hapus** pada salah satu item dan setujui konfirmasi untuk menghapusnya.
 
-## 7. Build Android nanti
-Firebase di project ini dimuat melalui CDN, jadi aplikasi memerlukan koneksi internet untuk login dan membaca/menulis riwayat. Perhitungan diskon lokal tetap berjalan meskipun Firebase belum diatur.
+## Menjalankan di Android dengan Cordova
+Plugin `cordova-plugin-device` tetap digunakan untuk menampilkan platform saat event `deviceready` berjalan. Firebase SDK dimuat melalui CDN, sehingga koneksi internet diperlukan untuk memuat modul Firebase, autentikasi anonim, dan akses Cloud Firestore. Kalkulasi diskon tetap berjalan secara lokal tanpa Firebase.
 
-Setelah JDK 17 dan Android SDK dikonfigurasi, kembali ke folder utama Cordova dan jalankan:
+Di folder utama proyek, jalankan: 
 
-```powershell
-npx.cmd cordova requirements android
-npx.cmd cordova build android
+```bash
+npm install
+npx cordova platform add android
+npx cordova requirements android
+npx cordova build android
 ```
 
-## Catatan rumus
-Harga setelah diskon pertama = harga awal × (1 − diskon 1 / 100).
-Harga akhir = harga setelah diskon pertama × (1 − diskon 2 / 100).
-Nominal hemat = harga awal − harga akhir.
+Sesuaikan langkah platform Android dengan setup Cordova yang sudah ada pada komputer.
+
+## Uji fungsional yang disarankan
+| No. | Skenario | Hasil yang diharapkan |
+|---|---|---|
+| 1 | Harga Rp500.000, diskon 50% dan 20% | Harga akhir Rp200.000; diskon efektif 60% |
+| 2 | Simpan perhitungan saat internet aktif | Pesan berhasil dan dokumen muncul di `users/{uid}/history` |
+| 3 | Baca riwayat | Maksimal 30 dokumen milik UID aktif ditampilkan |
+| 4 | Hapus satu riwayat | Setelah konfirmasi, dokumen terhapus dari Firestore dan daftar |
+| 5 | Anonymous Authentication tidak aktif | Pesan kegagalan autentikasi ditampilkan |
+| 6 | Rules menolak akses | Pesan akses ditolak ditampilkan; data tidak berubah |
+| 7 | Buka aplikasi tanpa internet sejak awal | Kalkulator tetap berjalan; modul riwayat menampilkan pesan gagal dimuat |
+| 8 | Buka melalui browser dan Android | Status platform menampilkan Mode web atau platform Android |
+
+## Catatan keamanan dan pengujian
+- Firestore Rules membatasi akses berdasarkan UID pengguna yang sedang terautentikasi.
+- Rules hanya mengizinkan Create, Read, dan Delete. Update sengaja dinonaktifkan.
+- Untuk menguji isolasi data antar pengguna, gunakan dua sesi/instalasi dengan UID anonim berbeda; pengguna kedua tidak boleh membaca atau menghapus dokumen pengguna pertama.
+- Jangan menyatakan pengujian berhasil sebelum benar-benar dijalankan pada Firebase project dan perangkat yang digunakan.
+
+## Batas waktu respons operasi Firestore
+
+Operasi simpan dan hapus menampilkan peringatan apabila Firestore belum memberikan respons dalam 10 detik. Batas waktu ini hanya menghentikan penantian antarmuka, bukan membatalkan permintaan yang sudah dikirim ke Firestore. Karena itu tombol Simpan atau Hapus tetap dinonaktifkan sampai permintaan aslinya memperoleh hasil, untuk menghindari pengiriman ulang dan kemungkinan data ganda. Jika koneksi kembali, status akhir akan diperbarui sesuai respons Firebase.
+
+Fitur ini bukan penyimpanan offline dan tidak menjamin sinkronisasi offline. Pengujian tetap perlu dilakukan pada APK Android dengan koneksi aktif dan mode pesawat.

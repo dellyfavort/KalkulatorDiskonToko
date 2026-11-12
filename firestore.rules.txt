@@ -32,11 +32,15 @@ service cloud.firestore {
           && request.resource.data.persenHemat is number
           && request.resource.data.persenHemat >= 0
           && request.resource.data.persenHemat <= 100
-          && request.resource.data.createdAt is timestamp;
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.createdAt == request.time;
       }
 
+      // Pengguna hanya dapat membaca dan menghapus riwayat milik UID-nya sendiri.
       allow read, delete: if isOwner();
       allow create: if isOwner() && validCalculation();
+
+      // Riwayat bersifat tetap setelah dibuat; operasi Update tidak diizinkan.
       allow update: if false;
     }
   }

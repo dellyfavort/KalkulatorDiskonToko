@@ -5,7 +5,67 @@
   const discount1Input = document.getElementById('discount1');
   const discount2Input = document.getElementById('discount2');
   const inputs = [priceInput, discount1Input, discount2Input];
+  const appShell = document.querySelector('.app-shell');
+  const visualViewport = window.visualViewport || null;
   let activeInput = priceInput;
+  let expandedViewportHeight = Math.max(
+    window.innerHeight || 0,
+    visualViewport ? visualViewport.height : 0
+  );
+  let revealInputTimer = null;
+
+  function currentVisibleHeight() {
+    const heights = [window.innerHeight || 0];
+    if (visualViewport && visualViewport.height) heights.push(visualViewport.height);
+    return Math.max(240, Math.min.apply(null, heights.filter(Boolean)));
+  }
+
+  function revealFocusedInput() {
+    window.clearTimeout(revealInputTimer);
+    revealInputTimer = window.setTimeout(function () {
+      const focusedInput = inputs.includes(document.activeElement) ? document.activeElement : null;
+      if (!focusedInput || !appShell) return;
+
+      const fieldContainer = focusedInput.closest('.input-container') || focusedInput;
+      const rect = fieldContainer.getBoundingClientRect();
+      const visibleTop = visualViewport ? visualViewport.offsetTop + 10 : 10;
+      const visibleBottom = (visualViewport ? visualViewport.offsetTop + visualViewport.height : window.innerHeight) - 22;
+
+      if (rect.bottom > visibleBottom) {
+        appShell.scrollBy({ top: rect.bottom - visibleBottom + 14, behavior: 'auto' });
+      } else if (rect.top < visibleTop) {
+        appShell.scrollBy({ top: rect.top - visibleTop - 14, behavior: 'auto' });
+      }
+    }, 180);
+  }
+
+  function updateKeyboardLayout() {
+    if (!appShell) return;
+
+    const visibleHeight = currentVisibleHeight();
+    const fieldIsFocused = inputs.includes(document.activeElement);
+    if (!fieldIsFocused && visibleHeight > expandedViewportHeight - 60) {
+      expandedViewportHeight = visibleHeight;
+    }
+
+    // Tetap anggap keyboard terbuka selama viewport masih menyusut,
+    // meskipun input baru saja blur dan animasi keyboard belum selesai.
+    const keyboardIsOpen = expandedViewportHeight - visibleHeight > 100;
+    appShell.classList.toggle('keyboard-open', keyboardIsOpen);
+
+    if (keyboardIsOpen) {
+      appShell.style.setProperty('--app-visible-height', visibleHeight + 'px');
+      revealFocusedInput();
+    } else {
+      appShell.style.removeProperty('--app-visible-height');
+      if (!fieldIsFocused) expandedViewportHeight = visibleHeight;
+    }
+  }
+
+  window.addEventListener('resize', updateKeyboardLayout, { passive: true });
+  if (visualViewport) {
+    visualViewport.addEventListener('resize', updateKeyboardLayout, { passive: true });
+  }
 
   const view = {
     oldPrice: document.getElementById('oldPrice'),
@@ -13,10 +73,19 @@
     savingText: document.getElementById('savingText'),
     savingBadge: document.getElementById('savingBadge'),
     discountSummary: document.getElementById('discountSummary'),
+    effectiveDiscountText: document.getElementById('effectiveDiscountText'),
     platformStatus: document.getElementById('platformStatus')
   };
 
   const percentFormatter = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 });
+  let latestCalculation = null;
+
+  function setMessage(element, message, state) {
+    if (!element) return;
+    element.textContent = message;
+    if (state) element.dataset.state = state;
+    else delete element.dataset.state;
+  }
 
   function rawDigits(value) {
     return String(value || '').replace(/\D/g, '');
@@ -144,31 +213,83 @@
       : 'Isi harga untuk melihat penghematan';
     view.discountSummary.textContent = getDiscountLabel(discount1, discount2);
     view.savingBadge.classList.toggle('is-empty', !hasPrice || saving <= 0);
-    updateSelectedPresets();
 
-    // === PENAMBAHAN TIMER & SINYAL KE FIREBASE ===
-    if (typeof window.ketikTimer !== 'undefined') {
-      clearTimeout(window.ketikTimer); // Batalkan timer jika user masih mengetik
-    }
-    
-    // Set timer baru selama 1.5 detik (1500 milidetik)
-    window.ketikTimer = setTimeout(function() {
-      // Pastikan ada input harga dan penghematan sebelum menyimpan
-      if (hasPrice && saving > 0) {
-        // Kirim sinyal ke firebase-history.js
-        window.dispatchEvent(new CustomEvent('simpanDataKalkulator', {
-          detail: { 
-            hargaAwal: price, 
-            diskon1: discount1, 
-            diskon2: discount2, 
-            hargaAkhir: finalPrice, 
-            hemat: saving 
-          }
-        }));
+    if (view.effectiveDiscountText) {
+      if (hasPrice && discount1 > 0 && discount2 > 0) {
+        const combined = percentFormatter.format(discount1 + discount2);
+        view.effectiveDiscountText.textContent =
+          'Diskon ' + percentFormatter.format(discount1) + '% + ' +
+          percentFormatter.format(discount2) + '% menghasilkan diskon efektif ' +
+          percentFormatter.format(savingPercent) + '%, bukan ' + combined + '%.';
+      } else if (hasPrice && (discount1 > 0 || discount2 > 0)) {
+        view.effectiveDiscountText.textContent =
+          'Diskon efektif ' + percentFormatter.format(savingPercent) + '%.';
+      } else {
+        view.effectiveDiscountText.textContent = 'Masukkan diskon untuk melihat persentase penghematan efektif.';
       }
-    }, 1500);
-    // ==============================================
+    }
+
+    latestCalculation = {
+      hargaAwal: price,
+      diskon1: discount1,
+      diskon2: discount2,
+      hargaSetelahDiskon1: afterDiscount1,
+      hargaAkhir: finalPrice,
+      totalHemat: saving,
+      persenHemat: savingPercent,
+      hasPrice: hasPrice
+    };
+
+    updateSelectedPresets();
   }
+
+  // Firebase mengambil hasil terbaru hanya ketika pengguna menekan tombol Simpan.
+  window.getKalkulatorCalculation = function () {
+    return latestCalculation ? { ...latestCalculation } : null;
+  };
+
+  const saveHistoryButton = document.getElementById('saveHistoryButton');
+  const saveHistoryStatus = document.getElementById('saveHistoryStatus');
+  const historyButton = document.getElementById('historyButton');
+  const historyModal = document.getElementById('historyModal');
+  const historyStatus = document.getElementById('historyStatus');
+  const closeHistoryButton = document.getElementById('closeHistoryButton');
+
+  saveHistoryButton?.addEventListener('click', function () {
+    const calculation = window.getKalkulatorCalculation();
+    if (!calculation || !calculation.hasPrice || calculation.hargaAwal <= 0) {
+      setMessage(saveHistoryStatus, 'Masukkan harga awal yang valid sebelum menyimpan.', 'error');
+      return;
+    }
+
+    if (typeof window.simpanRiwayatPerhitungan !== 'function') {
+      setMessage(saveHistoryStatus, 'Fitur riwayat belum siap. Periksa koneksi internet, lalu muat ulang aplikasi.', 'error');
+      return;
+    }
+
+    window.simpanRiwayatPerhitungan(calculation);
+  });
+
+  historyButton?.addEventListener('click', function () {
+    if (historyModal) historyModal.hidden = false;
+    if (typeof window.bukaRiwayatPerhitungan === 'function') {
+      window.bukaRiwayatPerhitungan();
+    } else {
+      setMessage(historyStatus, 'Riwayat tidak dapat dimuat. Pastikan internet aktif saat membuka aplikasi, lalu coba muat ulang.', 'error');
+    }
+  });
+
+  closeHistoryButton?.addEventListener('click', function () {
+    if (historyModal) historyModal.hidden = true;
+  });
+
+  historyModal?.addEventListener('click', function (event) {
+    if (event.target === historyModal) historyModal.hidden = true;
+  });
+
+  window.addEventListener('firebase:unavailable', function () {
+    setMessage(saveHistoryStatus, 'Modul riwayat Firebase tidak berhasil dimuat. Sambungkan internet dan muat ulang aplikasi.', 'error');
+  });
 
   function handleTypedInput(input) {
     const originalValue = input.value;
@@ -181,9 +302,64 @@
     calculate();
   }
 
+  // Kolom input dibuat readonly saat aplikasi pertama dibuka agar Android WebView
+  // tidak langsung menampilkan keyboard. Ketukan pengguna akan mengaktifkannya.
+  function clearStartupInputFocus() {
+    if (inputs.includes(document.activeElement)) {
+      document.activeElement.blur();
+    }
+  }
+
+  clearStartupInputFocus();
+  if (typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(function () {
+      clearStartupInputFocus();
+      updateKeyboardLayout();
+    });
+  } else {
+    updateKeyboardLayout();
+  }
+  window.addEventListener('orientationchange', function () {
+    window.setTimeout(function () {
+      if (!inputs.includes(document.activeElement)) {
+        expandedViewportHeight = Math.max(window.innerHeight || 0, visualViewport ? visualViewport.height : 0);
+      }
+      updateKeyboardLayout();
+    }, 250);
+  }, { passive: true });
+
   inputs.forEach(function (input) {
-    input.addEventListener('focus', function () { setActiveField(input); });
-    input.addEventListener('click', function () { setActiveField(input); });
+    input.addEventListener('pointerdown', function () {
+      // Ambil tinggi viewport sebelum keyboard terbuka sebagai ukuran layar normal.
+      if (!appShell.classList.contains('keyboard-open')) {
+        expandedViewportHeight = currentVisibleHeight();
+      }
+      if (input.readOnly) {
+        const wasFocused = document.activeElement === input;
+        input.readOnly = false;
+        // Jika WebView sempat memberi fokus awal pada kolom readonly,
+        // blur lalu focus kembali dalam gestur pengguna agar keyboard muncul.
+        if (wasFocused) {
+          input.blur();
+          input.focus();
+        }
+      }
+    });
+    input.addEventListener('click', function () {
+      if (input.readOnly) {
+        input.readOnly = false;
+        input.focus();
+      }
+      setActiveField(input);
+    });
+    input.addEventListener('focus', function () {
+      setActiveField(input);
+      updateKeyboardLayout();
+      revealFocusedInput();
+    });
+    input.addEventListener('blur', function () {
+      window.setTimeout(updateKeyboardLayout, 120);
+    });
     input.addEventListener('input', function () { handleTypedInput(input); });
     input.addEventListener('change', function () {
       const normalized = normalizeDigits(input.value, input);
@@ -195,8 +371,12 @@
         event.preventDefault();
         const currentIndex = inputs.indexOf(input);
         const nextInput = inputs[currentIndex + 1];
-        if (nextInput) nextInput.focus();
-        else input.blur();
+        if (nextInput) {
+          nextInput.readOnly = false;
+          nextInput.focus();
+        } else {
+          input.blur();
+        }
       }
     });
   });
@@ -230,7 +410,7 @@
         }
         return;
       }
-
+// penanganan tombol angka & tombol cepat diskon
       const key = button.dataset.key;
       if (/^\d$/.test(key)) {
         const nextRaw = raw.slice(0, startCount) + key + raw.slice(endCount);

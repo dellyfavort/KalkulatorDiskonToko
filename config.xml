@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<widget id="com.example.kalkulatordiskontoko" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+<widget id="com.example.kalkulatordiskontoko" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
   <name>Kalkulator Diskon Toko</name>
   <description>Kalkulator harga akhir untuk diskon bertingkat.</description>
   <author email="student@example.com" href="https://cordova.apache.org">Mahasiswa</author>
@@ -9,4 +9,10 @@
   <preference name="Orientation" value="portrait" />
   <preference name="AndroidWindowSplashScreenBackground" value="#f4f8f6" />
   <plugin name="cordova-plugin-device" spec="^3.0.0" />
+  <platform name="android">
+    <!-- Resize area WebView saat keyboard sistem muncul, bukan menggeser seluruh aplikasi. -->
+    <edit-config file="AndroidManifest.xml" mode="merge" target="/manifest/application/activity">
+      <activity android:windowSoftInputMode="adjustResize" />
+    </edit-config>
+  </platform>
 </widget>
