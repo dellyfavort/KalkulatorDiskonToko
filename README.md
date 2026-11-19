@@ -89,3 +89,18 @@ Sesuaikan langkah platform Android dengan setup Cordova yang sudah ada pada komp
 Operasi simpan dan hapus menampilkan peringatan apabila Firestore belum memberikan respons dalam 10 detik. Batas waktu ini hanya menghentikan penantian antarmuka, bukan membatalkan permintaan yang sudah dikirim ke Firestore. Karena itu tombol Simpan atau Hapus tetap dinonaktifkan sampai permintaan aslinya memperoleh hasil, untuk menghindari pengiriman ulang dan kemungkinan data ganda. Jika koneksi kembali, status akhir akan diperbarui sesuai respons Firebase.
 
 Fitur ini bukan penyimpanan offline dan tidak menjamin sinkronisasi offline. Pengujian tetap perlu dilakukan pada APK Android dengan koneksi aktif dan mode pesawat.
+
+## Ekspor PDF riwayat
+
+Tombol **Ekspor PDF** ada di jendela Riwayat. Laporan dibuat dari daftar riwayat yang sedang tampil (maksimal 30 terbaru), sehingga tidak ada query Firestore tambahan dan Security Rules tidak berubah.
+
+Di Android WebView, `window.print()` tidak berfungsi, jadi pencetakan memakai plugin Cordova:
+
+```
+cordova plugin add cordova-plugin-printer
+cordova build android
+```
+
+Setelah tombol ditekan, aplikasi menanyakan nama toko (opsional, disimpan di perangkat), lalu membuka dialog cetak Android. Pilih **Simpan sebagai PDF** untuk menyimpan laporan.
+
+Catatan: kompatibilitas plugin dengan versi Cordova Android yang dipakai belum diuji di perangkat. Jika build gagal, periksa pesan error plugin sebelum menambah fitur lain.

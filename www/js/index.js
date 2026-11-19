@@ -48,8 +48,6 @@
       expandedViewportHeight = visibleHeight;
     }
 
-    // Tetap anggap keyboard terbuka selama viewport masih menyusut,
-    // meskipun input baru saja blur dan animasi keyboard belum selesai.
     const keyboardIsOpen = expandedViewportHeight - visibleHeight > 100;
     appShell.classList.toggle('keyboard-open', keyboardIsOpen);
 
@@ -132,12 +130,13 @@
     activeInput = input;
     setActiveField(input);
     try {
+      input.readOnly = false;
       input.focus({ preventScroll: true });
       const caretDigits = Math.min(caretDigitCount, normalized.length);
       const caretPosition = cursorPositionForDigitCount(input.value, caretDigits);
       input.setSelectionRange(caretPosition, caretPosition);
     } catch (error) {
-      // Some embedded WebViews do not support focus options; the value is still updated.
+      input.readOnly = false;
       input.focus();
     }
     calculate();
@@ -169,7 +168,7 @@
     ]);
     mapping.forEach(function (containerId, field) {
       const container = document.getElementById(containerId);
-      container.classList.toggle('is-active', field === input);
+      if (container) container.classList.toggle('is-active', field === input);
     });
     updateSelectedPresets();
   }
@@ -200,7 +199,6 @@
     const discount1 = readPercent(discount1Input);
     const discount2 = readPercent(discount2Input);
 
-    // Pembulatan dilakukan ke rupiah utuh pada tiap tahap diskon.
     const afterDiscount1 = Math.round(price * (1 - discount1 / 100));
     const finalPrice = Math.round(afterDiscount1 * (1 - discount2 / 100));
     const saving = Math.max(0, price - finalPrice);
@@ -243,7 +241,6 @@
     updateSelectedPresets();
   }
 
-  // Firebase mengambil hasil terbaru hanya ketika pengguna menekan tombol Simpan.
   window.getKalkulatorCalculation = function () {
     return latestCalculation ? { ...latestCalculation } : null;
   };
@@ -254,6 +251,48 @@
   const historyModal = document.getElementById('historyModal');
   const historyStatus = document.getElementById('historyStatus');
   const closeHistoryButton = document.getElementById('closeHistoryButton');
+
+  // Tombol Fitur Baru (Reset & Riwayat Tambahan)
+  const resetPriceBtn = document.getElementById('resetPriceBtn');
+  const resetDisc1Btn = document.getElementById('resetDisc1Btn');
+  const resetDisc2Btn = document.getElementById('resetDisc2Btn');
+  const resetAllBtn = document.getElementById('resetAllBtn');
+  const exportPdfButton = document.getElementById('exportPdfButton');
+  const clearAllHistoryButton = document.getElementById('clearAllHistoryButton');
+
+  resetPriceBtn?.addEventListener('click', function () {
+    setInputDigits(priceInput, '', 0);
+  });
+
+  resetDisc1Btn?.addEventListener('click', function () {
+    setInputDigits(discount1Input, '', 0);
+  });
+
+  resetDisc2Btn?.addEventListener('click', function () {
+    setInputDigits(discount2Input, '', 0);
+  });
+
+  resetAllBtn?.addEventListener('click', function () {
+    setInputDigits(priceInput, '', 0);
+    setInputDigits(discount1Input, '', 0);
+    setInputDigits(discount2Input, '', 0);
+  });
+
+  exportPdfButton?.addEventListener('click', function () {
+    if (typeof window.eksporRiwayatPDF === 'function') {
+      window.eksporRiwayatPDF();
+    } else {
+      setMessage(historyStatus, 'Fitur ekspor belum siap. Pastikan internet aktif saat membuka aplikasi, lalu muat ulang.', 'error');
+    }
+  });
+
+  clearAllHistoryButton?.addEventListener('click', function () {
+    if (typeof window.hapusSemuaRiwayat === 'function') {
+      window.hapusSemuaRiwayat();
+    } else {
+      alert('Fitur hapus semua riwayat sedang disiapkan.');
+    }
+  });
 
   saveHistoryButton?.addEventListener('click', function () {
     const calculation = window.getKalkulatorCalculation();
@@ -302,23 +341,23 @@
     calculate();
   }
 
-  // Kolom input dibuat readonly saat aplikasi pertama dibuka agar Android WebView
-  // tidak langsung menampilkan keyboard. Ketukan pengguna akan mengaktifkannya.
-  function clearStartupInputFocus() {
-    if (inputs.includes(document.activeElement)) {
-      document.activeElement.blur();
-    }
-  }
+  inputs.forEach(function (input) {
+    input.readOnly = true;
+    input.blur();
+  });
 
-  clearStartupInputFocus();
   if (typeof window.requestAnimationFrame === 'function') {
     window.requestAnimationFrame(function () {
-      clearStartupInputFocus();
+      inputs.forEach(function (input) {
+        input.readOnly = true;
+        input.blur();
+      });
       updateKeyboardLayout();
     });
   } else {
     updateKeyboardLayout();
   }
+
   window.addEventListener('orientationchange', function () {
     window.setTimeout(function () {
       if (!inputs.includes(document.activeElement)) {
@@ -328,36 +367,39 @@
     }, 250);
   }, { passive: true });
 
+  document.addEventListener('pointerdown', function (event) {
+    const clickedInsideInput = inputs.some(function (input) {
+      return input.contains(event.target) || event.target.closest('.input-container');
+    });
+    const clickedInsideNumpad = event.target.closest('.numpad') || event.target.closest('.preset-row');
+    
+    if (!clickedInsideInput && !clickedInsideNumpad) {
+      if (inputs.includes(document.activeElement)) {
+        document.activeElement.blur();
+      }
+    }
+  });
+
   inputs.forEach(function (input) {
     input.addEventListener('pointerdown', function () {
-      // Ambil tinggi viewport sebelum keyboard terbuka sebagai ukuran layar normal.
       if (!appShell.classList.contains('keyboard-open')) {
         expandedViewportHeight = currentVisibleHeight();
       }
-      if (input.readOnly) {
-        const wasFocused = document.activeElement === input;
-        input.readOnly = false;
-        // Jika WebView sempat memberi fokus awal pada kolom readonly,
-        // blur lalu focus kembali dalam gestur pengguna agar keyboard muncul.
-        if (wasFocused) {
-          input.blur();
-          input.focus();
-        }
-      }
+      input.readOnly = false;
     });
     input.addEventListener('click', function () {
-      if (input.readOnly) {
-        input.readOnly = false;
-        input.focus();
-      }
+      input.readOnly = false;
+      input.focus();
       setActiveField(input);
     });
     input.addEventListener('focus', function () {
+      input.readOnly = false;
       setActiveField(input);
       updateKeyboardLayout();
       revealFocusedInput();
     });
     input.addEventListener('blur', function () {
+      input.readOnly = true;
       window.setTimeout(updateKeyboardLayout, 120);
     });
     input.addEventListener('input', function () { handleTypedInput(input); });
@@ -381,14 +423,13 @@
     });
   });
 
-  // Numpad layar tetap tersedia untuk sentuhan, tapi field asli juga bisa diketik.
   document.querySelectorAll('.numpad-btn').forEach(function (button) {
     button.addEventListener('pointerdown', function (event) {
-      // Mencegah tombol merebut fokus dari kolom input saat disentuh/diklik.
       if (event.pointerType !== 'keyboard') event.preventDefault();
     });
     button.addEventListener('click', function () {
       const input = activeInput || priceInput;
+      input.readOnly = false;
       const action = button.dataset.action;
       const start = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
       const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : input.value.length;
@@ -410,7 +451,6 @@
         }
         return;
       }
-// penanganan tombol angka & tombol cepat diskon
       const key = button.dataset.key;
       if (/^\d$/.test(key)) {
         const nextRaw = raw.slice(0, startCount) + key + raw.slice(endCount);
@@ -425,11 +465,11 @@
     });
     button.addEventListener('click', function () {
       const target = activeInput === discount2Input ? discount2Input : discount1Input;
+      target.readOnly = false;
       setInputDigits(target, button.dataset.value, String(button.dataset.value).length);
     });
   });
 
-  // Menjaga status Cordova jika kalkulator dijalankan sebagai aplikasi Android.
   document.addEventListener('deviceready', function () {
     if (window.device && window.device.platform) {
       view.platformStatus.textContent = 'Kalkulator aktif · ' + window.device.platform;
@@ -438,7 +478,6 @@
     }
   }, false);
 
-  // Format nilai contoh awal sesuai desain, tanpa membuka keyboard secara otomatis.
   priceInput.value = formatDigits(normalizeDigits(priceInput.value, priceInput), priceInput);
   discount1Input.value = normalizeDigits(discount1Input.value, discount1Input);
   discount2Input.value = normalizeDigits(discount2Input.value, discount2Input);

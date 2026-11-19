@@ -38,19 +38,50 @@ const historyStatus = document.getElementById("historyStatus");
 const saveButton = document.getElementById("saveHistoryButton");
 const saveStatus = document.getElementById("saveHistoryStatus");
 
-// Firestore Web SDK dapat menunggu respons server ketika perangkat offline.
-// Batas ini hanya membatasi waktu tunggu UI; operasi Firestore tidak dibatalkan.
 const FIRESTORE_OPERATION_TIMEOUT_MS = 10000;
-
-// Login anonim pertama kali juga membutuhkan jaringan. Tanpa batas waktu, status "Menyimpan..."
-// atau "Menghapus..." bisa menggantung jika proses masuk ke Firebase tidak pernah selesai.
 const AUTH_TIMEOUT_MS = 10000;
 
 if (!modal || !historyList || !historyStatus || !saveButton || !saveStatus) {
   throw new Error("Elemen riwayat atau tombol simpan tidak ditemukan. Periksa index.html.");
 }
 
-// Tunggu Firebase memulihkan sesi yang sudah ada. Jika belum ada, buat akun anonim.
+let loadedHistory = [];
+let loadedUid = "";
+
+// Helper untuk menormalisasi data riwayat lama (originalPrice, dll.) dan baru (hargaAwal, dll.)
+function normalizeHistoryItem(rawData, createdAtDate) {
+  const hargaAwal = Number(rawData.hargaAwal !== undefined ? rawData.hargaAwal : rawData.originalPrice) || 0;
+  const diskon1 = Number(rawData.diskon1 !== undefined ? rawData.diskon1 : rawData.discount1) || 0;
+  const diskon2 = Number(rawData.diskon2 !== undefined ? rawData.diskon2 : rawData.discount2) || 0;
+
+  const afterFirstCalc = Math.round(hargaAwal * (1 - diskon1 / 100));
+  const hargaSetelahDiskon1 = Number(
+    rawData.hargaSetelahDiskon1 !== undefined ? rawData.hargaSetelahDiskon1 : afterFirstCalc
+  ) || 0;
+
+  const hargaAkhir = Number(rawData.hargaAkhir !== undefined ? rawData.hargaAkhir : rawData.finalPrice) || 0;
+  const totalHemat = Number(
+    rawData.totalHemat !== undefined
+      ? rawData.totalHemat
+      : (rawData.saving !== undefined ? rawData.saving : Math.max(0, hargaAwal - hargaAkhir))
+  ) || 0;
+
+  const persenHemat = rawData.persenHemat !== undefined
+    ? Number(rawData.persenHemat) || 0
+    : (hargaAwal > 0 ? (totalHemat / hargaAwal) * 100 : 0);
+
+  return {
+    hargaAwal,
+    diskon1,
+    diskon2,
+    hargaSetelahDiskon1,
+    hargaAkhir,
+    totalHemat,
+    persenHemat,
+    createdAt: createdAtDate
+  };
+}
+
 let authenticationPromise = null;
 function getAuthenticatedUser() {
   if (auth.currentUser) return Promise.resolve(auth.currentUser);
@@ -92,8 +123,6 @@ function waitWithTimeout(promise, timeoutMs, errorCode, errorMessage) {
     }, timeoutMs);
   });
 
-  // Promise.race tidak membatalkan operasi yang sedang berjalan.
-  // Pemanggil tetap harus menangani hasil akhir promise secara terpisah.
   return Promise.race([promise, timeoutPromise]).finally(() => {
     window.clearTimeout(timeoutId);
   });
@@ -108,9 +137,6 @@ function waitForFirestoreResponse(operationPromise) {
   );
 }
 
-// authenticationPromise disimpan dan dipakai ulang oleh getAuthenticatedUser(), jadi proses masuk
-// yang tertunda tidak diulang. Setelah batas waktu, pengguna boleh mencoba lagi dan akan
-// memakai proses yang sama jika masih berjalan.
 function getAuthenticatedUserWithTimeout() {
   return waitWithTimeout(
     getAuthenticatedUser(),
@@ -136,15 +162,14 @@ function getFirebaseErrorMessage(error, action) {
     return "Tidak dapat terhubung ke Firebase. Periksa koneksi internet lalu coba lagi.";
   }
   if (code === "app/auth-timeout") {
-    // Permintaan ke Firestore belum dikirim, sehingga aman untuk mencoba lagi.
-    return "Belum dapat terhubung ke Firebase setelah 10 detik. Data belum dikirim. Periksa koneksi internet lalu coba lagi.";
+    return "Belum dapat terhubung ke Firebase setelah 10 detik. Periksa koneksi internet lalu coba lagi.";
   }
   if (code === "app/operation-timeout") {
     if (action === "save") {
-      return "Belum ada konfirmasi Firebase setelah 10 detik. Permintaan mungkin masih diproses. Jangan tekan Simpan lagi; periksa koneksi.";
+      return "Belum ada konfirmasi Firebase setelah 10 detik. Permintaan mungkin masih diproses.";
     }
     if (action === "delete") {
-      return "Belum ada konfirmasi Firebase setelah 10 detik. Permintaan hapus mungkin masih diproses. Jangan tekan Hapus lagi; periksa koneksi.";
+      return "Belum ada konfirmasi Firebase setelah 10 detik. Permintaan hapus mungkin masih diproses.";
     }
     return "Firebase belum memberikan respons setelah 10 detik. Periksa koneksi lalu coba lagi.";
   }
@@ -177,7 +202,9 @@ function formatDate(timestamp) {
 }
 
 function createHistoryCard(snapshot) {
-  const item = snapshot.data();
+  const rawData = snapshot.data();
+  const item = normalizeHistoryItem(rawData, null);
+
   const card = document.createElement("article");
   card.className = "history-item";
 
@@ -207,7 +234,7 @@ function createHistoryCard(snapshot) {
 
   const date = document.createElement("p");
   date.className = "history-date";
-  date.textContent = formatDate(item.createdAt);
+  date.textContent = formatDate(rawData.createdAt);
 
   card.append(top, details, afterFirst, saving, date);
   return card;
@@ -219,11 +246,20 @@ async function loadHistory() {
 
   const user = await getAuthenticatedUserWithTimeout();
   const historyQuery = query(
-    collection(db, "users", user.uid, "history"),
+    collection(db, "users", user.uid, "histories"),
     orderBy("createdAt", "desc"),
     limit(30)
   );
   const result = await getDocs(historyQuery);
+
+  loadedUid = user.uid;
+  loadedHistory = result.docs.map((snapshot) => {
+    const rawData = snapshot.data();
+    const createdAtDate = rawData.createdAt && typeof rawData.createdAt.toDate === "function"
+      ? rawData.createdAt.toDate()
+      : null;
+    return normalizeHistoryItem(rawData, createdAtDate);
+  });
 
   if (result.empty) {
     setStatus(historyStatus, "Belum ada riwayat tersimpan.", "neutral");
@@ -246,6 +282,90 @@ window.bukaRiwayatPerhitungan = async function () {
   }
 };
 
+function cetakDiIframe(html) {
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  document.body.appendChild(iframe);
+  const frameDoc = iframe.contentWindow.document;
+  frameDoc.open();
+  frameDoc.write(html);
+  frameDoc.close();
+  window.setTimeout(() => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    window.setTimeout(() => iframe.remove(), 1000);
+  }, 250);
+}
+
+// Fitur Ekspor PDF menggunakan modul laporan terstruktur
+window.eksporRiwayatPDF = function () {
+  if (!loadedHistory.length) {
+    setStatus(historyStatus, "Belum ada riwayat yang dimuat untuk diekspor. Buka riwayat saat online lebih dulu.", "error");
+    return;
+  }
+  if (typeof window.buatLaporanHTML !== "function") {
+    setStatus(historyStatus, "Modul laporan belum dimuat. Muat ulang aplikasi.", "error");
+    return;
+  }
+
+  let namaToko = "";
+  try { namaToko = window.localStorage.getItem("namaToko") || ""; } catch (error) { namaToko = ""; }
+  const input = window.prompt("Nama toko untuk kop laporan (boleh dikosongkan):", namaToko);
+  if (input === null) return;
+  namaToko = input.trim().slice(0, 60);
+  try { window.localStorage.setItem("namaToko", namaToko); } catch (error) { /* abaikan */ }
+
+  const html = window.buatLaporanHTML(loadedHistory, {
+    namaToko,
+    idPerangkat: loadedUid.slice(-6),
+    waktuCetak: new Date()
+  });
+
+  const printer = window.cordova && window.cordova.plugins && window.cordova.plugins.printer;
+  if (printer && typeof printer.print === "function") {
+    setStatus(historyStatus, "Membuka dialog cetak. Pilih 'Simpan sebagai PDF' untuk menyimpan laporan.", "loading");
+    printer.print(html, { name: "Laporan-Riwayat-Diskon", landscape: true }, (selesai) => {
+      setStatus(historyStatus, selesai ? "Laporan dikirim ke dialog cetak." : "Cetak dibatalkan.", selesai ? "success" : "neutral");
+    });
+    return;
+  }
+
+  if (window.device && window.device.platform === "Android") {
+    setStatus(historyStatus, "Plugin cetak belum terpasang di aplikasi ini.", "error");
+    return;
+  }
+
+  cetakDiIframe(html);
+};
+
+// Fitur Hapus Semua Riwayat Sekaligus dari koleksi 'histories'
+window.hapusSemuaRiwayat = async function () {
+  if (!window.confirm("Yakin ingin menghapus SELURUH riwayat perhitungan? Tindakan ini tidak dapat dibatalkan.")) return;
+
+  setStatus(historyStatus, "Menghapus semua riwayat...", "loading");
+  try {
+    const user = await getAuthenticatedUserWithTimeout();
+    const historyQuery = query(collection(db, "users", user.uid, "histories"));
+    const snapshot = await getDocs(historyQuery);
+
+    if (snapshot.empty) {
+      setStatus(historyStatus, "Tidak ada riwayat untuk dihapus.", "neutral");
+      return;
+    }
+
+    const deletePromises = snapshot.docs.map((documentSnap) =>
+      deleteDoc(doc(db, "users", user.uid, "histories", documentSnap.id))
+    );
+
+    await Promise.all(deletePromises);
+    await loadHistory();
+    setStatus(historyStatus, "Semua riwayat berhasil dihapus.", "success");
+  } catch (error) {
+    console.error("Gagal menghapus semua riwayat:", error);
+    setStatus(historyStatus, "Gagal menghapus seluruh riwayat. Periksa koneksi Anda.", "error");
+  }
+};
+
 window.simpanRiwayatPerhitungan = async function (calculation) {
   if (saveButton.disabled) return;
 
@@ -260,7 +380,7 @@ window.simpanRiwayatPerhitungan = async function (calculation) {
   let timedOut = false;
   try {
     const user = await getAuthenticatedUserWithTimeout();
-    const savePromise = addDoc(collection(db, "users", user.uid, "history"), {
+    const savePromise = addDoc(collection(db, "users", user.uid, "histories"), {
       hargaAwal: Number(calculation.hargaAwal),
       diskon1: Number(calculation.diskon1),
       diskon2: Number(calculation.diskon2),
@@ -279,8 +399,6 @@ window.simpanRiwayatPerhitungan = async function (calculation) {
       timedOut = true;
       setStatus(saveStatus, getFirebaseErrorMessage(error, "save"), "error");
 
-      // Jangan aktifkan tombol lagi sebelum operasi asli selesai. Ini mencegah
-      // pengguna mengirim addDoc kedua ketika permintaan pertama masih tertunda.
       savePromise.then(async () => {
         setStatus(saveStatus, "Perhitungan berhasil disimpan ke riwayat.", "success");
         if (!modal.hidden) {
@@ -327,7 +445,7 @@ async function deleteHistoryItem(historyId, button) {
   let timedOut = false;
   try {
     const user = await getAuthenticatedUserWithTimeout();
-    const deletePromise = deleteDoc(doc(db, "users", user.uid, "history", historyId));
+    const deletePromise = deleteDoc(doc(db, "users", user.uid, "histories", historyId));
 
     try {
       await waitForFirestoreResponse(deletePromise);
@@ -337,8 +455,6 @@ async function deleteHistoryItem(historyId, button) {
       timedOut = true;
       setStatus(historyStatus, getFirebaseErrorMessage(error, "delete"), "error");
 
-      // Tombol tetap nonaktif sampai permintaan asli mendapat respons agar
-      // pengguna tidak mengirim ulang operasi yang statusnya belum diketahui.
       deletePromise.then(async () => {
         try {
           const remaining = await loadHistory();

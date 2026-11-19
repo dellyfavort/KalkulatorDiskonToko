@@ -19,6 +19,7 @@
         <h1>Kalkulator Diskon</h1>
       </div>
       
+      <!-- Tombol Riwayat di Header Sesuai Semula -->
       <button id="historyButton" type="button" aria-label="Riwayat" class="icon-button p-2 -mr-2 rounded-full hover:bg-gray-100 transition-colors">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M3.5 11a8.5 8.5 0 1 1 2.2 5.7"/>
@@ -54,7 +55,11 @@
         <span class="live-indicator"><span></span> Otomatis</span>
       </div>
 
-      <label class="field-label" for="originalPrice">Harga awal</label>
+      <!-- Label & Tombol Reset Harga Awal -->
+      <div class="field-header-row">
+        <label class="field-label" for="originalPrice">Harga awal</label>
+        <button type="button" id="resetPriceBtn" class="inline-reset-btn" aria-label="Reset harga awal">Reset</button>
+      </div>
       <div id="container-harga" class="input-container price-input-container">
         <span class="currency-prefix" aria-hidden="true">Rp</span>
         <input id="originalPrice" name="originalPrice" class="price-input" type="text" readonly inputmode="numeric" pattern="[0-9.]*" autocomplete="off" spellcheck="false" value="500.000" placeholder="Contoh: 500.000" aria-describedby="keyboardHint" />
@@ -62,20 +67,29 @@
 
       <div class="discount-grid">
         <div class="discount-field">
-          <label class="field-label" for="discount1">Diskon 1</label>
+          <div class="field-header-row">
+            <label class="field-label" for="discount1">Diskon 1</label>
+            <button type="button" id="resetDisc1Btn" class="inline-reset-btn" aria-label="Reset diskon 1">Reset</button>
+          </div>
           <div id="container-diskon1" class="input-container percent-input-container">
             <input id="discount1" name="discount1" type="text" readonly inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" value="50" placeholder="0" aria-label="Persentase diskon pertama" />
             <span class="percent-suffix" aria-hidden="true">%</span>
           </div>
         </div>
         <div class="discount-field">
-          <label class="field-label" for="discount2">Diskon 2 <span class="extra-tag">Ekstra</span></label>
+          <div class="field-header-row">
+            <label class="field-label" for="discount2">Diskon 2 <span class="extra-tag">Ekstra</span></label>
+            <button type="button" id="resetDisc2Btn" class="inline-reset-btn" aria-label="Reset diskon 2">Reset</button>
+          </div>
           <div id="container-diskon2" class="input-container percent-input-container">
             <input id="discount2" name="discount2" type="text" readonly inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" value="20" placeholder="0" aria-label="Persentase diskon kedua" />
             <span class="percent-suffix" aria-hidden="true">%</span>
           </div>
         </div>
       </div>
+
+      <!-- Tombol Reset Seluruh Input Sekaligus -->
+      <button type="button" id="resetAllBtn" class="reset-all-button">Reset Semua Input</button>
 
       <div class="preset-row" aria-label="Pilihan cepat persentase diskon">
         <button type="button" class="preset" data-value="10" aria-pressed="false">10%</button>
@@ -112,13 +126,20 @@
       <span>Diskon dihitung bertingkat</span>
     </footer>
 
-    <!-- WADAH RIWAYAT DIPINDAHKAN KE SINI (DI DALAM MAIN APP-SHELL) -->
+    <!-- Modal Riwayat dengan Tombol Hapus Semua & Ekspor CSV -->
     <div id="historyModal" hidden>
       <section class="history-panel">
         <header class="history-header">
           <h2 id="historyTitle">Riwayat Perhitungan</h2>
           <button id="closeHistoryButton" type="button" aria-label="Tutup riwayat">×</button>
         </header>
+        
+        <!-- Baris Aksi Riwayat (Hapus Semua & Ekspor PDF) -->
+        <div class="history-actions-bar">
+          <button id="exportPdfButton" type="button" class="history-action-btn export-btn">Ekspor PDF</button>
+          <button id="clearAllHistoryButton" type="button" class="history-action-btn delete-all-btn">Hapus Semua</button>
+        </div>
+
         <p id="historyStatus" aria-live="polite">Riwayat perhitungan tersimpan di Firebase.</p>
         <div id="historyList"></div>
       </section>
@@ -128,6 +149,7 @@
 
   <script src="cordova.js"></script>
   <script src="js/firebase-config.js"></script>
+  <script src="js/laporan-riwayat.js"></script>
   <script src="js/index.js"></script>
   <script src="js/firebase-loader.js"></script>
 </body>
