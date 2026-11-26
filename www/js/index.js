@@ -258,6 +258,7 @@
   const resetDisc2Btn = document.getElementById('resetDisc2Btn');
   const resetAllBtn = document.getElementById('resetAllBtn');
   const exportPdfButton = document.getElementById('exportPdfButton');
+  const exportCsvButton = document.getElementById('exportCsvButton');
   const clearAllHistoryButton = document.getElementById('clearAllHistoryButton');
 
   resetPriceBtn?.addEventListener('click', function () {
@@ -281,6 +282,14 @@
   exportPdfButton?.addEventListener('click', function () {
     if (typeof window.eksporRiwayatPDF === 'function') {
       window.eksporRiwayatPDF();
+    } else {
+      setMessage(historyStatus, 'Fitur ekspor belum siap. Pastikan internet aktif saat membuka aplikasi, lalu muat ulang.', 'error');
+    }
+  });
+
+  exportCsvButton?.addEventListener('click', function () {
+    if (typeof window.eksporRiwayatCSV === 'function') {
+      window.eksporRiwayatCSV();
     } else {
       setMessage(historyStatus, 'Fitur ekspor belum siap. Pastikan internet aktif saat membuka aplikasi, lalu muat ulang.', 'error');
     }

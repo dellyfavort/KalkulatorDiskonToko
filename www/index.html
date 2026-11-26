@@ -126,7 +126,7 @@
       <span>Diskon dihitung bertingkat</span>
     </footer>
 
-    <!-- Modal Riwayat dengan Tombol Hapus Semua & Ekspor CSV -->
+    <!-- Modal Riwayat dengan Ekspor PDF, Ekspor CSV, dan Hapus Semua -->
     <div id="historyModal" hidden>
       <section class="history-panel">
         <header class="history-header">
@@ -137,8 +137,17 @@
         <!-- Baris Aksi Riwayat (Hapus Semua & Ekspor PDF) -->
         <div class="history-actions-bar">
           <button id="exportPdfButton" type="button" class="history-action-btn export-btn">Ekspor PDF</button>
+          <button id="exportCsvButton" type="button" class="history-action-btn export-btn">Ekspor CSV</button>
           <button id="clearAllHistoryButton" type="button" class="history-action-btn delete-all-btn">Hapus Semua</button>
         </div>
+
+        <details class="report-settings">
+          <summary>Pengaturan laporan (opsional)</summary>
+          <label for="shopNameInput">Nama toko untuk kop laporan</label>
+          <input id="shopNameInput" type="text" maxlength="60" placeholder="Contoh: Toko Maju Jaya" autocomplete="off">
+          <label for="discountLimitInput">Batas diskon efektif (%), untuk menandai diskon terlalu besar</label>
+          <input id="discountLimitInput" type="text" inputmode="numeric" maxlength="3" placeholder="Contoh: 40" autocomplete="off">
+        </details>
 
         <p id="historyStatus" aria-live="polite">Riwayat perhitungan tersimpan di Firebase.</p>
         <div id="historyList"></div>

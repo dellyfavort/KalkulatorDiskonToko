@@ -507,3 +507,21 @@ input::placeholder { color: #bcc6c0; }
   color: #8b978f;
   margin-top: 4px;
 }
+/* Pengaturan laporan (nama toko dan batas diskon) */
+.report-settings {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid #dfe8e3;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+.report-settings summary { cursor: pointer; font-weight: 750; color: var(--green); }
+.report-settings label { display: block; margin: 8px 0 3px; color: #4b5563; }
+.report-settings input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #cfd9d3;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}

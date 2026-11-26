@@ -297,26 +297,106 @@ function cetakDiIframe(html) {
   }, 250);
 }
 
-// Fitur Ekspor PDF menggunakan modul laporan terstruktur
-window.eksporRiwayatPDF = function () {
-  if (!loadedHistory.length) {
-    setStatus(historyStatus, "Belum ada riwayat yang dimuat untuk diekspor. Buka riwayat saat online lebih dulu.", "error");
+// ===== Laporan dan ekspor =====
+// Laporan membaca sampai REPORT_LIMIT dokumen, terpisah dari daftar riwayat yang tetap 30 terbaru.
+const REPORT_LIMIT = 500;
+
+function bacaPengaturan() {
+  let namaToko = "", batasDiskon = 0;
+  try {
+    namaToko = window.localStorage.getItem("namaToko") || "";
+    batasDiskon = Number(window.localStorage.getItem("batasDiskon")) || 0;
+  } catch (error) { /* penyimpanan tidak tersedia: pakai bawaan */ }
+  return { namaToko, batasDiskon };
+}
+
+function simpanPengaturan(namaToko, batasDiskon) {
+  const nama = String(namaToko || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  const batas = Math.min(100, Math.max(0, Math.round(Number(batasDiskon) || 0)));
+  try {
+    window.localStorage.setItem("namaToko", nama);
+    window.localStorage.setItem("batasDiskon", String(batas));
+  } catch (error) { /* abaikan */ }
+  return { namaToko: nama, batasDiskon: batas };
+}
+
+async function muatDataLaporan() {
+  const user = await getAuthenticatedUserWithTimeout();
+  const snapshot = await waitForFirestoreResponse(getDocs(query(
+    collection(db, "users", user.uid, "histories"),
+    orderBy("createdAt", "desc"),
+    limit(REPORT_LIMIT)
+  )));
+  loadedUid = user.uid;
+  return snapshot.docs.map((docSnap) => {
+    const raw = docSnap.data();
+    const date = raw.createdAt && typeof raw.createdAt.toDate === "function" ? raw.createdAt.toDate() : null;
+    return normalizeHistoryItem(raw, date);
+  });
+}
+
+function namaBerkas(namaToko, ekstensi) {
+  const toko = String(namaToko || "").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_");
+  const d = new Date();
+  const tanggal = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  return (toko || "Laporan_Diskon") + "_" + tanggal + "." + ekstensi;
+}
+
+function bagikanCsv(nama, csv) {
+  const sharing = window.plugins && window.plugins.socialsharing;
+  if (sharing && typeof sharing.shareWithOptions === "function") {
+    let biner = "";
+    new TextEncoder().encode(csv).forEach((b) => { biner += String.fromCharCode(b); });
+    sharing.shareWithOptions(
+      { files: ["df:" + nama + ";data:text/csv;base64," + btoa(biner)], subject: nama, chooserTitle: "Simpan atau kirim laporan CSV" },
+      () => setStatus(historyStatus, "Berkas CSV dibagikan.", "success"),
+      () => setStatus(historyStatus, "Berbagi berkas dibatalkan.", "neutral")
+    );
     return;
   }
+  if (window.device && window.device.platform === "Android") {
+    setStatus(historyStatus, "Plugin berbagi berkas belum terpasang di aplikasi ini.", "error");
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = nama;
+  document.body.appendChild(a); a.click(); a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setStatus(historyStatus, "Berkas CSV diunduh.", "success");
+}
+
+async function siapkanLaporan() {
+  const input = document.getElementById("shopNameInput");
+  const batasInput = document.getElementById("discountLimitInput");
+  const pengaturan = simpanPengaturan(input ? input.value : bacaPengaturan().namaToko,
+    batasInput ? batasInput.value : bacaPengaturan().batasDiskon);
+  setStatus(historyStatus, "Menyiapkan data laporan...", "loading");
+  try {
+    const items = await muatDataLaporan();
+    if (!items.length) {
+      setStatus(historyStatus, "Belum ada riwayat untuk diekspor.", "error");
+      return null;
+    }
+    return { items, pengaturan };
+  } catch (error) {
+    console.error("Gagal memuat data laporan:", error);
+    setStatus(historyStatus, getFirebaseErrorMessage(error, "read"), "error");
+    return null;
+  }
+}
+
+window.eksporRiwayatPDF = async function () {
   if (typeof window.buatLaporanHTML !== "function") {
     setStatus(historyStatus, "Modul laporan belum dimuat. Muat ulang aplikasi.", "error");
     return;
   }
+  const data = await siapkanLaporan();
+  if (!data) return;
 
-  let namaToko = "";
-  try { namaToko = window.localStorage.getItem("namaToko") || ""; } catch (error) { namaToko = ""; }
-  const input = window.prompt("Nama toko untuk kop laporan (boleh dikosongkan):", namaToko);
-  if (input === null) return;
-  namaToko = input.trim().slice(0, 60);
-  try { window.localStorage.setItem("namaToko", namaToko); } catch (error) { /* abaikan */ }
-
-  const html = window.buatLaporanHTML(loadedHistory, {
-    namaToko,
+  const html = window.buatLaporanHTML(data.items, {
+    namaToko: data.pengaturan.namaToko,
+    batasDiskon: data.pengaturan.batasDiskon,
     idPerangkat: loadedUid.slice(-6),
     waktuCetak: new Date()
   });
@@ -324,19 +404,36 @@ window.eksporRiwayatPDF = function () {
   const printer = window.cordova && window.cordova.plugins && window.cordova.plugins.printer;
   if (printer && typeof printer.print === "function") {
     setStatus(historyStatus, "Membuka dialog cetak. Pilih 'Simpan sebagai PDF' untuk menyimpan laporan.", "loading");
-    printer.print(html, { name: "Laporan-Riwayat-Diskon", landscape: true }, (selesai) => {
+    printer.print(html, { name: namaBerkas(data.pengaturan.namaToko, "pdf").replace(/\.pdf$/, ""), landscape: true }, (selesai) => {
       setStatus(historyStatus, selesai ? "Laporan dikirim ke dialog cetak." : "Cetak dibatalkan.", selesai ? "success" : "neutral");
     });
     return;
   }
-
   if (window.device && window.device.platform === "Android") {
     setStatus(historyStatus, "Plugin cetak belum terpasang di aplikasi ini.", "error");
     return;
   }
-
   cetakDiIframe(html);
+  setStatus(historyStatus, "Dialog cetak dibuka.", "success");
 };
+
+window.eksporRiwayatCSV = async function () {
+  if (typeof window.buatCsvRiwayat !== "function") {
+    setStatus(historyStatus, "Modul laporan belum dimuat. Muat ulang aplikasi.", "error");
+    return;
+  }
+  const data = await siapkanLaporan();
+  if (!data) return;
+  bagikanCsv(namaBerkas(data.pengaturan.namaToko, "csv"), window.buatCsvRiwayat(data.items));
+};
+
+(function isiPengaturanAwal() {
+  const pengaturan = bacaPengaturan();
+  const input = document.getElementById("shopNameInput");
+  const batasInput = document.getElementById("discountLimitInput");
+  if (input) input.value = pengaturan.namaToko;
+  if (batasInput) batasInput.value = pengaturan.batasDiskon || "";
+})();
 
 // Fitur Hapus Semua Riwayat Sekaligus dari koleksi 'histories'
 window.hapusSemuaRiwayat = async function () {

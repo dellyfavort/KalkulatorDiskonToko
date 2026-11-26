@@ -1,46 +1,36 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId}/history/{historyId} {
+
+    match /users/{userId}/histories/{historyId} {
+
       function isOwner() {
         return request.auth != null && request.auth.uid == userId;
       }
 
       function validCalculation() {
-        return request.resource.data.keys().hasAll([
+        let d = request.resource.data;
+        return d.keys().hasAll([
                  'hargaAwal', 'diskon1', 'diskon2', 'hargaSetelahDiskon1',
                  'hargaAkhir', 'totalHemat', 'persenHemat', 'createdAt'
                ])
-          && request.resource.data.keys().hasOnly([
+          && d.keys().hasOnly([
                  'hargaAwal', 'diskon1', 'diskon2', 'hargaSetelahDiskon1',
                  'hargaAkhir', 'totalHemat', 'persenHemat', 'createdAt'
                ])
-          && request.resource.data.hargaAwal is number
-          && request.resource.data.hargaAwal > 0
-          && request.resource.data.diskon1 is number
-          && request.resource.data.diskon1 >= 0
-          && request.resource.data.diskon1 <= 100
-          && request.resource.data.diskon2 is number
-          && request.resource.data.diskon2 >= 0
-          && request.resource.data.diskon2 <= 100
-          && request.resource.data.hargaSetelahDiskon1 is number
-          && request.resource.data.hargaSetelahDiskon1 >= 0
-          && request.resource.data.hargaAkhir is number
-          && request.resource.data.hargaAkhir >= 0
-          && request.resource.data.totalHemat is number
-          && request.resource.data.totalHemat >= 0
-          && request.resource.data.persenHemat is number
-          && request.resource.data.persenHemat >= 0
-          && request.resource.data.persenHemat <= 100
-          && request.resource.data.createdAt is timestamp
-          && request.resource.data.createdAt == request.time;
+          && d.hargaAwal is number && d.hargaAwal > 0
+          && d.diskon1 is number && d.diskon1 >= 0 && d.diskon1 <= 100
+          && d.diskon2 is number && d.diskon2 >= 0 && d.diskon2 <= 100
+          && d.hargaSetelahDiskon1 is number && d.hargaSetelahDiskon1 >= 0
+          && d.hargaAkhir is number && d.hargaAkhir >= 0
+          && d.totalHemat is number && d.totalHemat >= 0
+          && d.persenHemat is number && d.persenHemat >= 0 && d.persenHemat <= 100
+          && d.createdAt is timestamp && d.createdAt == request.time;
       }
 
-      // Pengguna hanya dapat membaca dan menghapus riwayat milik UID-nya sendiri.
-      allow read, delete: if isOwner();
       allow create: if isOwner() && validCalculation();
-
-      // Riwayat bersifat tetap setelah dibuat; operasi Update tidak diizinkan.
+      allow get, list, delete: if isOwner();
       allow update: if false;
     }
   }

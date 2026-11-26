@@ -9,6 +9,8 @@
   <preference name="Orientation" value="portrait" />
   <preference name="AndroidWindowSplashScreenBackground" value="#f4f8f6" />
   <plugin name="cordova-plugin-device" spec="^3.0.0" />
+  <plugin name="cordova-plugin-printer" />
+  <plugin name="cordova-plugin-x-socialsharing" />
   <platform name="android">
     <!-- Resize area WebView saat keyboard sistem muncul, bukan menggeser seluruh aplikasi. -->
     <edit-config file="AndroidManifest.xml" mode="merge" target="/manifest/application/activity">
